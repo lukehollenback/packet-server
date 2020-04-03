@@ -15,14 +15,14 @@ func main() {
   //
   // Create a new server that will bind to port 9999.
   //
-  server := tcp_server.New("localhost:9999")
+  server := tcpserver.New("localhost:9999")
 
   //
   // Register a "new client connection" event handler. Whenever a new client connects, a new thread
   // (via a goroutine) will be fired up and will subsequently be resonsible for listening for and
   // handling any messages coming from it.
   //
-  server.OnNewClient(func(c *tcp_server.Client) {
+  server.OnNewClient(func(c *tcpserver.Client) {
     c.Send("Hello")
   })
 
@@ -30,14 +30,14 @@ func main() {
   // Register a "new message from client" event handler. This will execute within the respective
   // client's associated goroutine whenever a new message is recieved.
   //
-  server.OnNewMessage(func(c *tcp_server.Client, message string) {
+  server.OnNewMessage(func(c *tcpserver.Client, message string) {
     // new message received
   })
 
   //
   // Register a "client disconnected" event handler.
   //
-  server.OnClientConnectionClosed(func(c *tcp_server.Client, err error) {
+  server.OnClientConnectionClosed(func(c *tcpserver.Client, err error) {
     // connection with client lost
   })
 
