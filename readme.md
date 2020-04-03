@@ -1,56 +1,48 @@
-[![Build Status](https://travis-ci.org/firstrow/tcp_server.svg?branch=master)](https://travis-ci.org/firstrow/tcp_server)
+# Golang TCP/IP Server
 
-# TCPServer
-Package tcp_server created to help build TCP servers faster.
+A simple multi-threaded TCP/IP packet server written in Go. Originally forked off of
+[firstrow/tcp_server](https://github.com/firstrow/tcp_server).
 
-### Install package
-
-``` bash
-go get -u github.com/firstrow/tcp_server
-```
-
-### Usage:
-
-NOTICE: `OnNewMessage` callback will receive new message only if it's ending with `\n`
+## Example
 
 ``` go
 package main
 
-import "github.com/firstrow/tcp_server"
+import "github.com/lukehollenback/tcp-server"
 
 func main() {
+	//
+	// Create a new server that will bind to port 9999.
+	//
 	server := tcp_server.New("localhost:9999")
 
+	//
+	// Register a "new client connection" event handler. Whenever a new client connects, a new thread
+	// (via a goroutine) will be fired up and will subsequently be resonsible for listening for and
+	// handling any messages coming from it.
+	//
 	server.OnNewClient(func(c *tcp_server.Client) {
-		// new client connected
-		// lets send some message
 		c.Send("Hello")
 	})
+
+	//
+	// Register a "new message from client" event handler. This will execute within the respective
+	// client's associated goroutine whenever a new message is recieved.
+	//
 	server.OnNewMessage(func(c *tcp_server.Client, message string) {
 		// new message received
 	})
+
+	//
+	// Register a "client disconnected" event handler.
+	//
 	server.OnClientConnectionClosed(func(c *tcp_server.Client, err error) {
 		// connection with client lost
 	})
 
+	//
+	// Bind the server and have it begin listening for connections.
+	//
 	server.Listen()
 }
 ```
-
-# Contributing
-
-To hack on this project:
-
-1. Install as usual (`go get -u github.com/firstrow/tcp_server`)
-2. Create your feature branch (`git checkout -b my-new-feature`)
-3. Ensure everything works and the tests pass (`go test`)
-4. Commit your changes (`git commit -am 'Add some feature'`)
-
-Contribute upstream:
-
-1. Fork it on GitHub
-2. Add your remote (`git remote add fork git@github.com:firstrow/tcp_server.git`)
-3. Push to the branch (`git push fork my-new-feature`)
-4. Create a new Pull Request on GitHub
-
-Notice: Always use the original import path by installing with `go get`.
