@@ -7,14 +7,18 @@ import (
 	"net"
 )
 
-// Client holds info about connection
+//
+// Client holds info about a single client connection.
+//
 type Client struct {
 	conn   net.Conn
-	Server *server
+	Server *Server
 }
 
-// TCP server
-type server struct {
+//
+// Server holds info about an actual server instance.
+//
+type Server struct {
 	address                  string // Address to open connection: localhost:9999
 	config                   *tls.Config
 	listener                 net.Listener
@@ -39,6 +43,9 @@ func (c *Client) listen() {
 	}
 }
 
+//
+// Close closes the current connection to the client.
+//
 func (c *Client) close() {
 	c.conn.Close()
 }
@@ -55,16 +62,8 @@ func (c *Client) Send(message string) error {
 // individual send operation fails, future sends will be terminated and the relevant error will be
 // returned.
 //
-func (s *server) SendAll(message string) error {
-	for _, e := range s.clients {
-		err := e.Send(message)
-
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
+func (s *Server) SendAll(message string) error {
+	return s.SendBytesAll([]byte(message))
 }
 
 //
@@ -80,7 +79,10 @@ func (c *Client) SendBytes(b []byte) error {
 // individual send operation fails, future sends will be terminated and the relevant error will be
 // returned.
 //
-func (s *server) SendBytesAll(b []byte) error {
+func (s *Server) SendBytesAll(b []byte) error {
+	// TODO: If enough clients are connected that it would matter, spin off a couple of goroutines and
+	//  allocate them each a handful of the clients to send to.
+
 	for _, e := range s.clients {
 		err := e.SendBytes(b)
 
@@ -99,32 +101,25 @@ func (c *Client) Conn() net.Conn {
 	return c.conn
 }
 
-//
-// Close closes the current connection to the client.
-//
-func (c *Client) Close() error {
-	return c.conn.Close()
-}
-
 // Called right after server starts listening new client
-func (s *server) OnNewClient(callback func(c *Client)) {
+func (s *Server) OnNewClient(callback func(c *Client)) {
 	s.onNewClientCallback = callback
 }
 
 // Called right after connection closed
-func (s *server) OnClientConnectionClosed(callback func(c *Client, err error)) {
+func (s *Server) OnClientConnectionClosed(callback func(c *Client, err error)) {
 	s.onClientConnectionClosed = callback
 }
 
 // Called when Client receives new message
-func (s *server) OnNewMessage(callback func(c *Client, message string)) {
+func (s *Server) OnNewMessage(callback func(c *Client, message string)) {
 	s.onNewMessage = callback
 }
 
 //
 // Start starts the server if it has not already been started, or errors otherwise.
 //
-func (s *server) Start() {
+func (s *Server) Start() {
 	//
 	// (Re)-initialize necessary members of the server structure.
 	//
@@ -167,7 +162,7 @@ func (s *server) Start() {
 	}
 }
 
-func (s *server) Stop() {
+func (s *Server) Stop() {
 	for _, e := range s.clients {
 		e.Close()
 	}
@@ -176,9 +171,9 @@ func (s *server) Stop() {
 }
 
 // Creates new tcp server instance
-func New(address string) *server {
+func New(address string) *Server {
 	log.Println("Creating server with address", address)
-	server := &server{
+	server := &Server{
 		address: address,
 		config:  nil,
 	}
@@ -190,13 +185,13 @@ func New(address string) *server {
 	return server
 }
 
-func NewWithTLS(address string, certFile string, keyFile string) *server {
+func NewWithTLS(address string, certFile string, keyFile string) *Server {
 	log.Println("Creating server with address", address)
 	cert, _ := tls.LoadX509KeyPair(certFile, keyFile)
 	config := tls.Config{
 		Certificates: []tls.Certificate{cert},
 	}
-	server := &server{
+	server := &Server{
 		address: address,
 		config:  &config,
 	}

@@ -8,7 +8,7 @@ import (
 
 const TestMessage = "This is a test message. Here is a number: 12345.67890!\n"
 
-func buildTestServer() *server {
+func buildTestServer() *Server {
   return New("localhost:9999")
 }
 
