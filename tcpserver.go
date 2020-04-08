@@ -157,7 +157,7 @@ func (s *Server) Start() {
 	//
 	// Make sure that the server will always get cleaned up, no matter what happens to end execution.
 	//
-	//defer s.listener.Close()
+	defer s.listener.Close()
 
 	//
 	// Set the running sentinel
