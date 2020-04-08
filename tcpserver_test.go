@@ -86,6 +86,8 @@ func TestBasicLifecycle(t *testing.T) {
   if connectinClosed != true {
     t.Error("The \"OnClientConnectionClosed\" event handler never fired.")
   }
+
+  server.Stop()
 }
 
 func TestBasicLifecycleAgain(t *testing.T) {
@@ -162,4 +164,6 @@ func TestBasicLifecycleAgain(t *testing.T) {
   if connectinClosed != true {
     t.Error("The \"OnClientConnectionClosed\" event handler never fired.")
   }
+
+  server.Stop()
 }

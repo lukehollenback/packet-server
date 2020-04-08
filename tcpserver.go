@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"log"
 	"net"
+	"time"
 )
 
 //
@@ -12,13 +13,14 @@ import (
 //
 type Client struct {
 	conn   net.Conn
-	Server *Server
+	server *Server
 }
 
 //
 // Server holds info about an actual server instance.
 //
 type Server struct {
+	running                  bool
 	address                  string // Address to open connection: localhost:9999
 	config                   *tls.Config
 	listener                 net.Listener
@@ -30,23 +32,34 @@ type Server struct {
 
 // Read client data from channel
 func (c *Client) listen() {
-	c.Server.onNewClientCallback(c)
+	c.server.onNewClientCallback(c)
 	reader := bufio.NewReader(c.conn)
 	for {
 		message, err := reader.ReadString('\n')
 		if err != nil {
+			log.Printf("Buffer read for client at %s failed (%s).", c.conn.RemoteAddr(), err)
+
 			c.conn.Close()
-			c.Server.onClientConnectionClosed(c, err)
+
+			c.server.onClientConnectionClosed(c, err)
+
+			for i, e := range c.server.clients {
+				if e == c {
+					c.server.clients[len(c.server.clients)-1], c.server.clients[i] = c.server.clients[i], c.server.clients[len(c.server.clients)-1]
+					c.server.clients = c.server.clients[:len(c.server.clients)-1]
+				}
+			}
+
 			return
 		}
-		c.Server.onNewMessage(c, message)
+		c.server.onNewMessage(c, message)
 	}
 }
 
 //
 // Close closes the current connection to the client.
 //
-func (c *Client) close() {
+func (c *Client) Close() {
 	c.conn.Close()
 }
 
@@ -95,23 +108,24 @@ func (s *Server) SendBytesAll(b []byte) error {
 }
 
 //
-// Conn returns the current connection to the client.
+// OnNewClient registers a function to be called immediately after the server accepts a new
+// connection to a client and spins up a unique goroutine to handle communication with it.
 //
-func (c *Client) Conn() net.Conn {
-	return c.conn
-}
-
-// Called right after server starts listening new client
 func (s *Server) OnNewClient(callback func(c *Client)) {
 	s.onNewClientCallback = callback
 }
 
-// Called right after connection closed
+//
+// OnClientConnectionClosed registers a function to be called immediately after a connection to a
+// client is closed for any reason.
+//
 func (s *Server) OnClientConnectionClosed(callback func(c *Client, err error)) {
 	s.onClientConnectionClosed = callback
 }
 
-// Called when Client receives new message
+//
+// OnNewMessage registers a function to be called when a connected client receives a new message.
+//
 func (s *Server) OnNewMessage(callback func(c *Client, message string)) {
 	s.onNewMessage = callback
 }
@@ -137,23 +151,49 @@ func (s *Server) Start() {
 	}
 
 	if err != nil {
-		log.Fatal("Error starting TCP server.")
+		log.Fatal("An error occurred while attempting to start the server (", err, ").")
 	}
 
 	//
 	// Make sure that the server will always get cleaned up, no matter what happens to end execution.
 	//
-	defer s.listener.Close()
+	//defer s.listener.Close()
+
+	//
+	// Set the running sentinel
+	//
+	s.running = true
 
 	//
 	// Loop infinitely to accept new connections and spin off a handler thread for each.
 	//
-	for {
-		conn, _ := s.listener.Accept()
+	for s.running {
+		//
+		// Attempt to block and listen for new connections. If an error occurs and it is temporary,
+		// delay for a second and then continue listening. If it is not temporary, either continue
+		// shutting down the server (if shutdown has beed started already), or otherwise panic.
+		//
+		conn, err := s.listener.Accept()
 
+		if err != nil {
+			if realErr, ok := err.(net.Error); ok && realErr.Temporary() {
+				time.Sleep(1 * time.Second)
+			} else if !s.running {
+				log.Print("The server has stopped listening for new connections.")
+			} else {
+				log.Fatal(err)
+			}
+
+			continue
+		}
+
+		//
+		// If we get this far, we have accepted a connection from a valid client. Create a structure to
+		// represent said client and spin off a new goroutine to handle communication with it.
+		//
 		client := &Client{
 			conn:   conn,
-			Server: s,
+			server: s,
 		}
 
 		s.clients = append(s.clients, client)
@@ -162,12 +202,52 @@ func (s *Server) Start() {
 	}
 }
 
+//
+// Stop shuts down the running server.
+//
 func (s *Server) Stop() {
+	//
+	// Log some debug info.
+	//
+	log.Print("Attempting to stop server...")
+
+	//
+	// Make sure we even can stop the server (a.k.a. make sure that the server is actually running).
+	//
+	if !s.running {
+		log.Print("There is no running server to stop.")
+		return
+	}
+
+	//
+	// Set the running sentinel to false. This will cause the server's listening loop to stop.
+	//
+	s.running = false
+
+	//
+	// Close all client connections and wait for them to recieve their appropriate socket EOF messages
+	// and subsequently remove themselves from the slice of known clients.
+	//
 	for _, e := range s.clients {
 		e.Close()
 	}
 
+	for {
+		if len(s.clients) == 0 {
+			log.Print("All clients have been disconnected.")
+			break
+		}
+	}
+
+	//
+	// Unbind the server from its port and cause it to stop listening for new client connections.
+	//
 	s.listener.Close()
+
+	//
+	// Log some debug info.
+	//
+	log.Print("The server has been stopped.")
 }
 
 // Creates new tcp server instance
