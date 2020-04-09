@@ -51,6 +51,11 @@ func (c *Client) Send(message string) error {
 //
 func (c *Client) listen() {
 	//
+	// Make sure that, even if something goes wrong, we close the client connection.
+	//
+	defer c.Close()
+
+	//
 	// Execute the registered "new client" event handler.
 	//
 	c.server.onNewClientCallback(c)
@@ -71,10 +76,10 @@ func (c *Client) listen() {
 				log.Printf("Client at %s has disconnected.", c.conn.RemoteAddr())
 			} else {
 				log.Printf("Buffer read for client at %s failed (%s). Connection will be closed.",
-						c.conn.RemoteAddr(), err)
+					c.conn.RemoteAddr(), err)
 			}
 
-			c.conn.Close()
+			c.Close()
 			c.server.onClientConnectionClosed(c, err)
 			c.server.forgetClient(c)
 
@@ -154,34 +159,14 @@ func (s *Server) OnNewMessage(callback func(c *Client, message string)) {
 //
 func (s *Server) Start() {
 	//
-	// (Re)-initialize necessary members of the server structure.
+	// Initialize the necessary struct members and bind the server to the configured address and port.
 	//
-	s.clients = make([]*Client, 0)
-
-	//
-	// Attempt to fire up a the server.
-	//
-	var err error
-
-	if s.config == nil {
-		s.listener, err = net.Listen("tcp", s.address)
-	} else {
-		s.listener, err = tls.Listen("tcp", s.address, s.config)
-	}
-
-	if err != nil {
-		log.Fatal("An error occurred while attempting to start the server (", err, ").")
-	}
+	s.initialize()
 
 	//
 	// Make sure that the server will always get cleaned up, no matter what happens to end execution.
 	//
 	defer s.listener.Close()
-
-	//
-	// Set the running sentinel
-	//
-	s.running = true
 
 	//
 	// Loop infinitely to accept new connections and spin off a handler thread for each.
@@ -210,14 +195,7 @@ func (s *Server) Start() {
 		// If we get this far, we have accepted a connection from a valid client. Create a structure to
 		// represent said client and spin off a new goroutine to handle communication with it.
 		//
-		client := &Client{
-			conn:   conn,
-			server: s,
-		}
-
-		s.clients = append(s.clients, client)
-
-		go client.listen()
+		s.handleNewClient(conn)
 	}
 }
 
@@ -234,8 +212,7 @@ func (s *Server) Stop() {
 	// Make sure we even can stop the server (a.k.a. make sure that the server is actually running).
 	//
 	if !s.running {
-		log.Print("There is no running server to stop.")
-		return
+		log.Fatal("An attempt was made to stop a server that was not already running.")
 	}
 
 	//
@@ -307,6 +284,60 @@ func NewWithTLS(address string, certFile string, keyFile string) *Server {
 	server.OnClientConnectionClosed(func(c *Client, err error) {})
 
 	return server
+}
+
+//
+// initialize actually resets the server's internal state and binds it to the configured address
+// and port so that it can begin handling new client connections.
+//
+func (s *Server) initialize() {
+	//
+	// Make sure that the server is not already running.
+	//
+	if s.running {
+		log.Fatal("An attempt was made to start a server that was already running.")
+	}
+
+	//
+	// (Re)-initialize necessary members of the server structure.
+	//
+	s.clients = make([]*Client, 0)
+
+	//
+	// Attempt to fire up a the server.
+	//
+	var err error
+
+	if s.config == nil {
+		s.listener, err = net.Listen("tcp", s.address)
+	} else {
+		s.listener, err = tls.Listen("tcp", s.address, s.config)
+	}
+
+	if err != nil {
+		log.Fatal("An error occurred while attempting to start the server (", err, ").")
+	}
+
+	//
+	// Set the running sentinel
+	//
+	s.running = true
+}
+
+//
+// handleNewClient creates a new client structure to represent the provided connection, appends it
+// to the server's client table, and spins off a new goroutine to handle future interactions with
+// it.
+//
+func (s *Server) handleNewClient(conn net.Conn) {
+	client := &Client{
+		conn:   conn,
+		server: s,
+	}
+
+	s.clients = append(s.clients, client)
+
+	go client.listen()
 }
 
 //
