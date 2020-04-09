@@ -3,6 +3,7 @@ package tcpserver
 import (
 	"bufio"
 	"crypto/tls"
+	"io"
 	"log"
 	"net"
 	"time"
@@ -12,8 +13,8 @@ import (
 // Client holds info about a single client connection.
 //
 type Client struct {
-	conn   net.Conn
-	server *Server
+	conn   net.Conn // Literal connection to the client.
+	server *Server  // The server that the client belongs to.
 }
 
 //
@@ -21,39 +22,13 @@ type Client struct {
 //
 type Server struct {
 	running                  bool
-	address                  string // Address to open connection: localhost:9999
+	address                  string
 	config                   *tls.Config
 	listener                 net.Listener
 	clients                  []*Client
 	onNewClientCallback      func(c *Client)
 	onClientConnectionClosed func(c *Client, err error)
 	onNewMessage             func(c *Client, message string)
-}
-
-// Read client data from channel
-func (c *Client) listen() {
-	c.server.onNewClientCallback(c)
-	reader := bufio.NewReader(c.conn)
-	for {
-		message, err := reader.ReadString('\n')
-		if err != nil {
-			log.Printf("Buffer read for client at %s failed (%s).", c.conn.RemoteAddr(), err)
-
-			c.conn.Close()
-
-			c.server.onClientConnectionClosed(c, err)
-
-			for i, e := range c.server.clients {
-				if e == c {
-					c.server.clients[len(c.server.clients)-1], c.server.clients[i] = c.server.clients[i], c.server.clients[len(c.server.clients)-1]
-					c.server.clients = c.server.clients[:len(c.server.clients)-1]
-				}
-			}
-
-			return
-		}
-		c.server.onNewMessage(c, message)
-	}
 }
 
 //
@@ -68,6 +43,50 @@ func (c *Client) Close() {
 //
 func (c *Client) Send(message string) error {
 	return c.SendBytes([]byte(message))
+}
+
+//
+// listen reads and processes new messages from the client while it is connected. It is intended to
+// be run in its own goroutine per connected client.
+//
+func (c *Client) listen() {
+	//
+	// Execute the registered "new client" event handler.
+	//
+	c.server.onNewClientCallback(c)
+
+	//
+	// Create a buffer reader to read recieved messages from the client and begin doing so in a loop.
+	//
+	reader := bufio.NewReader(c.conn)
+	for {
+		//
+		// Attempt to block and read the next message from the client. If this fails for any reason
+		// (e.g. an actual error or a disconnect), handle it accordingly.
+		//
+		message, err := reader.ReadString('\n')
+
+		if err != nil {
+			if err == io.EOF {
+				log.Printf("Client at %s has disconnected.", c.conn.RemoteAddr())
+			} else {
+				log.Printf("Buffer read for client at %s failed (%s). Connection will be closed.",
+						c.conn.RemoteAddr(), err)
+			}
+
+			c.conn.Close()
+			c.server.onClientConnectionClosed(c, err)
+			c.server.forgetClient(c)
+
+			return
+		}
+
+		//
+		// If we get this far, we recieved a valid message from the client. Thus, execute the registered
+		// message handler.
+		//
+		c.server.onNewMessage(c, message)
+	}
 }
 
 //
@@ -250,9 +269,12 @@ func (s *Server) Stop() {
 	log.Print("The server has been stopped.")
 }
 
-// Creates new tcp server instance
+//
+// New creates a new regular server instance.
+//
 func New(address string) *Server {
-	log.Println("Creating server with address", address)
+	log.Print("Creating server with address ", address, ".")
+
 	server := &Server{
 		address: address,
 		config:  nil,
@@ -265,8 +287,12 @@ func New(address string) *Server {
 	return server
 }
 
+//
+// NewWithTLS creates a new TLS-enabled server instance that can handle secure connections.
+//
 func NewWithTLS(address string, certFile string, keyFile string) *Server {
-	log.Println("Creating server with address", address)
+	log.Print("Creating server with address ", address, ".")
+
 	cert, _ := tls.LoadX509KeyPair(certFile, keyFile)
 	config := tls.Config{
 		Certificates: []tls.Certificate{cert},
@@ -281,4 +307,21 @@ func NewWithTLS(address string, certFile string, keyFile string) *Server {
 	server.OnClientConnectionClosed(func(c *Client, err error) {})
 
 	return server
+}
+
+//
+// forgetClient removes the specified client from the server's client table (if it exists). Note
+// that it does NOT close the connection to the client.
+//
+func (s *Server) forgetClient(c *Client) {
+	for i, e := range s.clients {
+		if e == c {
+			s.clients[len(s.clients)-1], s.clients[i] = s.clients[i], s.clients[len(s.clients)-1]
+			s.clients = s.clients[:len(s.clients)-1]
+
+			return
+		}
+	}
+
+	log.Fatal("An unknown client was specified to be forgotten by the server.")
 }
