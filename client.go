@@ -2,6 +2,7 @@ package tcpserver
 
 import (
 	"bufio"
+	"fmt"
 	"io"
 	"log"
 	"net"
@@ -13,6 +14,29 @@ import (
 type Client struct {
 	conn   net.Conn // Literal connection to the client.
 	server *Server  // The server that the client belongs to.
+}
+
+//
+// LogPrefix generates a prefix string that can be used in log messages about the client.
+//
+func (c *Client) LogPrefix() string {
+	return c.logPrefix("  ")
+}
+
+//
+// RcvLogPrefix generates a prefix string that can be used in log messages about messages recieved
+// from the client.
+//
+func (c *Client) RcvLogPrefix() string {
+	return c.logPrefix("~>")
+}
+
+//
+// SndLogPrefix generates a prefix string that can be used in log messages about messages sent to
+// the client.
+//
+func (c *Client) SndLogPrefix() string {
+	return c.logPrefix("<~")
 }
 
 //
@@ -52,6 +76,14 @@ func (c *Client) SendBytes(b []byte) error {
 }
 
 //
+// logPrefix actually generates the prefix strings returned by the varous "*LogPrefix()" methods
+// that are provided with public visibility.
+//
+func (c *Client) logPrefix(symbol string) string {
+	return fmt.Sprintf("(%s) %s ", c.RemoteAddr(), symbol)
+}
+
+//
 // listen reads and processes new messages from the client while it is connected. It is intended to
 // be run in its own goroutine per connected client.
 //
@@ -79,10 +111,10 @@ func (c *Client) listen() {
 
 		if err != nil {
 			if err == io.EOF {
-				log.Printf("Client at %s has disconnected.", c.conn.RemoteAddr())
+				log.Printf("%sClient has disconnected.", c.LogPrefix())
 			} else {
-				log.Printf("Buffer read for client at %s failed (%s). Connection will be closed.",
-					c.conn.RemoteAddr(), err)
+				log.Printf("%sBuffer read for client at failed. Connection will be closed. " + 
+						"(Error: %s)", c.LogPrefix(), err)
 			}
 
 			c.Close()
