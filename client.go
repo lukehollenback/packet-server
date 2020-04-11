@@ -16,6 +16,20 @@ type Client struct {
 }
 
 //
+// RemoteAddr returns an address string (e.g. "{ip}:{port}") for the remote address of the client.
+//
+func (c *Client) RemoteAddr() string {
+	return c.conn.RemoteAddr().String()
+}
+
+//
+// LocalAddr returns an address string (e.g. "{ip}:{port}") for the local address of the client.
+//
+func (c *Client) LocalAddr() string {
+	return c.conn.LocalAddr().String()
+}
+
+//
 // Close closes the current connection to the client.
 //
 func (c *Client) Close() {
