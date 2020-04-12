@@ -80,7 +80,7 @@ func (c *Client) SendBytes(b []byte) error {
 // that are provided with public visibility.
 //
 func (c *Client) logPrefix(symbol string) string {
-	return fmt.Sprintf("(%s) %s ", c.RemoteAddr(), symbol)
+	return fmt.Sprintf("<~> %21s %s ", c.RemoteAddr(), symbol)
 }
 
 //
@@ -113,8 +113,8 @@ func (c *Client) listen() {
 			if err == io.EOF {
 				log.Printf("%sClient has disconnected.", c.LogPrefix())
 			} else {
-				log.Printf("%sBuffer read for client at failed. Connection will be closed. " + 
-						"(Error: %s)", c.LogPrefix(), err)
+				log.Printf("%sBuffer read for client at failed. Connection will be closed. "+
+					"(Error: %s)", c.LogPrefix(), err)
 			}
 
 			c.Close()
