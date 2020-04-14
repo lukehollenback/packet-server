@@ -1,6 +1,6 @@
 # Golang TCP/IP Server
 
-![Status: Work in Progress](https://img.shields.io/badge/Status-Work&dash;in&dash;Progress-blue.svg)
+![Status: Work in Progress](https://img.shields.io/badge/Status-Work&#32;in&#32;Progress-blue.svg)
 
 A simple multi-threaded TCP/IP packet server written in Go. Originally forked off of
 [firstrow/tcp_server](https://github.com/firstrow/tcp_server). Intended to be used as a starting
