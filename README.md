@@ -2,9 +2,9 @@
 
 ![Status: Work in Progress](https://img.shields.io/badge/Status-Work&#32;in&#32;Progress-blue.svg)
 
-A simple, multi-threaded packet server implementation written in Go. Originally forked off of
-[firstrow/tcp_server](https://github.com/firstrow/tcp_server). Intended to be used as a starting
-point for networking projects.
+A simple, multi-threaded TCP/IP and UDP packet server framework written in Go. Originally forked
+off of [firstrow/tcp_server](https://github.com/firstrow/tcp_server). Intended to be used as a
+starting point for networking projects.
 
 ## Example Usage
 
