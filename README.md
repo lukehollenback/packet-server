@@ -11,7 +11,11 @@ starting point for networking projects.
 ``` go
 package main
 
-import "github.com/lukehollenback/tcp-server/tcp"
+import (
+  "log"
+
+  "github.com/lukehollenback/packet-server/tcp"
+)
 
 func main() {
   var err error
@@ -19,11 +23,11 @@ func main() {
   //
   // Create a new server that will bind to port 9999.
   //
-  server := tcp.CreateServer(&ServerConfig{
-    address:                  "localhost:9999",
-    onNewClient:              func(c *Client) { log.Print("Client connected.") },
-    onNewMessage:             func(c *Client, msg string) { log.Print(msg) },
-    onClientConnectionClosed: func(client *Client) { log.Print("Client disconnected.") },
+  server := tcp.CreateServer(&tcp.ServerConfig{
+    Address:                  "localhost:9999",
+    OnNewClient:              func(c *tcp.Client) { log.Print("Client connected.") },
+    OnNewMessage:             func(c *tcp.Client, msg string) { log.Print(msg) },
+    OnClientConnectionClosed: func(client *tcp.Client) { log.Print("Client disconnected.") },
   })
 
   //
@@ -41,9 +45,7 @@ func main() {
   //
   // Tell the server to stop and wait for it to finishe doing so.
   //
-  var chStopped chan bool
-
-  chStopped, err = server.Stop()
+  chStopped, err := server.Stop()
   if err != nil {
     log.Fatalf("The server failed to stop! (Error: %s)", err)
   }

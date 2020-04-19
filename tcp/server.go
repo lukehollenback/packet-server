@@ -13,10 +13,10 @@ import (
 // ServerConfig holds various configuration attributes for creating a new server.
 //
 type ServerConfig struct {
-	address                  string                           // The bind "{address}:{port}" for the server's listener.
-	onNewClient              func(client *Client)             // Handler function to execute when a new client connects.
-	onClientConnectionClosed func(client *Client)             // Handler function to execute when a client disconnects. Do not expect connection to still be alive when executed.
-	onNewMessage             func(client *Client, msg string) // Handler function to execute when a new message is recieved from a client.
+	Address                  string                           // The bind "{address}:{port}" for the server's listener.
+	OnNewClient              func(client *Client)             // Handler function to execute when a new client connects.
+	OnClientConnectionClosed func(client *Client)             // Handler function to execute when a client disconnects. Do not expect connection to still be alive when executed.
+	OnNewMessage             func(client *Client, msg string) // Handler function to execute when a new message is recieved from a client.
 }
 
 //
@@ -71,11 +71,11 @@ func (o *Server) SendBytesAll(pyld []byte) {
 // OnNewClient executes the server's registered "on new client" handler function.
 //
 func (o *Server) onNewClient(client *Client) {
-	if o.config.onNewClient == nil {
+	if o.config.OnNewClient == nil {
 		return
 	}
 
-	o.config.onNewClient(client)
+	o.config.OnNewClient(client)
 }
 
 //
@@ -83,22 +83,22 @@ func (o *Server) onNewClient(client *Client) {
 // function.
 //
 func (o *Server) onClientConnectionClosed(client *Client) {
-	if o.config.onClientConnectionClosed == nil {
+	if o.config.OnClientConnectionClosed == nil {
 		return
 	}
 
-	o.config.onClientConnectionClosed(client)
+	o.config.OnClientConnectionClosed(client)
 }
 
 //
 // OnNewMessage executes the server's registered "on new message" handler function.
 //
 func (o *Server) onNewMessage(client *Client, msg string) {
-	if o.config.onNewMessage == nil {
+	if o.config.OnNewMessage == nil {
 		return
 	}
 
-	o.config.onNewMessage(client, msg)
+	o.config.OnNewMessage(client, msg)
 }
 
 //
@@ -130,7 +130,7 @@ func (o *Server) Start() error {
 	//
 	// Resolve the address.
 	//
-	tcpAddr, tcpAddrErr := net.ResolveTCPAddr("tcp", o.config.address)
+	tcpAddr, tcpAddrErr := net.ResolveTCPAddr("tcp", o.config.Address)
 	if tcpAddrErr != nil {
 		return tcpAddrErr
 	}
@@ -212,7 +212,7 @@ func (o *Server) Running() bool {
 // CreateServer creates a new regular server instance.
 //
 func CreateServer(config *ServerConfig) *Server {
-	log.Print("Creating server with address ", config.address, ".")
+	log.Print("Creating server with address ", config.Address, ".")
 
 	server := &Server{
 		mu:        &sync.Mutex{},
@@ -227,7 +227,7 @@ func CreateServer(config *ServerConfig) *Server {
 // CreateServerWithTLS creates a new TLS-enabled server instance that can handle secure connections.
 //
 func CreateServerWithTLS(config *ServerConfig, certFile string, keyFile string) *Server {
-	log.Print("Creating server with address ", config.address, ".")
+	log.Print("Creating server with address ", config.Address, ".")
 
 	cert, _ := tls.LoadX509KeyPair(certFile, keyFile)
 	tlsConfig := tls.Config{

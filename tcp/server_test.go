@@ -23,13 +23,13 @@ func TestBasicLifecycle(t *testing.T) {
 	// run some assertions.
 	//
 	server := CreateServer(&ServerConfig{
-		address:     TestServerAddress,
-		onNewClient: func(c *Client) { newClient = true },
-		onNewMessage: func(c *Client, message string) {
+		Address:     TestServerAddress,
+		OnNewClient: func(c *Client) { newClient = true },
+		OnNewMessage: func(c *Client, message string) {
 			messageReceived = true
 			messageText = message
 		},
-		onClientConnectionClosed: func(client *Client) { connectionClosed = true },
+		OnClientConnectionClosed: func(client *Client) { connectionClosed = true },
 	})
 
 	server.Start()
@@ -98,13 +98,13 @@ func TestBasicLifecycleAgain(t *testing.T) {
 	// run some assertions.
 	//
 	server := CreateServer(&ServerConfig{
-		address:     TestServerAddress,
-		onNewClient: func(c *Client) { newClient = true },
-		onNewMessage: func(c *Client, message string) {
+		Address:     TestServerAddress,
+		OnNewClient: func(c *Client) { newClient = true },
+		OnNewMessage: func(c *Client, message string) {
 			messageReceived = true
 			messageText = message
 		},
-		onClientConnectionClosed: func(client *Client) { connectionClosed = true },
+		OnClientConnectionClosed: func(client *Client) { connectionClosed = true },
 	})
 
 	server.Start()
@@ -165,7 +165,7 @@ func TestServerShutdownBeforeClientDisconnect(t *testing.T) {
 	// run some assertions.
 	//
 	server := CreateServer(&ServerConfig{
-		address: TestServerAddress,
+		Address: TestServerAddress,
 	})
 
 	server.Start()
