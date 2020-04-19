@@ -1,4 +1,4 @@
-package tcpserver
+package tcp
 
 import (
 	"crypto/tls"
@@ -13,10 +13,10 @@ import (
 // ServerConfig holds various configuration attributes for creating a new server.
 //
 type ServerConfig struct {
-	address                  string                          // The bind "{address}:{port}" for the server's listener.
-	onNewClientCallback      func(c *Client)                 // Handler function to execute when a new client connects.
-	onClientConnectionClosed func(c *Client)                 // Handler function to execute when a client disconnects. Do not expect connection to still be alive when executed.
-	onNewMessage             func(c *Client, message string) // Handler function to execute when a new message is recieved from a client.
+	address                  string                           // The bind "{address}:{port}" for the server's listener.
+	onNewClient              func(client *Client)             // Handler function to execute when a new client connects.
+	onClientConnectionClosed func(client *Client)             // Handler function to execute when a client disconnects. Do not expect connection to still be alive when executed.
+	onNewMessage             func(client *Client, msg string) // Handler function to execute when a new message is recieved from a client.
 }
 
 //
@@ -71,11 +71,11 @@ func (o *Server) SendBytesAll(pyld []byte) {
 // OnNewClient executes the server's registered "on new client" handler function.
 //
 func (o *Server) onNewClient(client *Client) {
-	if o.config.onNewClientCallback == nil {
+	if o.config.onNewClient == nil {
 		return
 	}
 
-	o.config.onNewClientCallback(client)
+	o.config.onNewClient(client)
 }
 
 //

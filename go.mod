@@ -1,3 +1,3 @@
-module github.com/lukehollenback/tcp-server
+module github.com/lukehollenback/packet-server
 
 go 1.14

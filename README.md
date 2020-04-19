@@ -1,8 +1,8 @@
-# Golang TCP/IP Server
+# Golang TCP/IP and UDP Packet Server
 
 ![Status: Work in Progress](https://img.shields.io/badge/Status-Work&#32;in&#32;Progress-blue.svg)
 
-A simple multi-threaded TCP/IP packet server written in Go. Originally forked off of
+A simple, multi-threaded packet server implementation written in Go. Originally forked off of
 [firstrow/tcp_server](https://github.com/firstrow/tcp_server). Intended to be used as a starting
 point for networking projects.
 
@@ -11,41 +11,43 @@ point for networking projects.
 ``` go
 package main
 
-import "github.com/lukehollenback/tcp-server"
+import "github.com/lukehollenback/tcp-server/tcp"
 
 func main() {
+  var err error
+
   //
   // Create a new server that will bind to port 9999.
   //
-  server := tcpserver.New("localhost:9999")
-
-  //
-  // Register a "new client connection" event handler. Whenever a new client connects, a new thread
-  // (via a goroutine) will be fired up and will subsequently be resonsible for listening for and
-  // handling any messages coming from it.
-  //
-  server.OnNewClient(func(c *tcpserver.Client) {
-    c.Send("Hello")
-  })
-
-  //
-  // Register a "new message from client" event handler. This will execute within the respective
-  // client's associated goroutine whenever a new message is recieved.
-  //
-  server.OnNewMessage(func(c *tcpserver.Client, message string) {
-    // new message received
-  })
-
-  //
-  // Register a "client disconnected" event handler.
-  //
-  server.OnClientConnectionClosed(func(c *tcpserver.Client, err error) {
-    // connection with client lost
+  server := tcp.CreateServer(&ServerConfig{
+    address:             "localhost:9999",
+    onNewClient: func(c *Client) { log.Print("Client connected.") },
+    onNewMessage: func(c *Client, msg string) { log.Print(msg) },
+    onClientConnectionClosed: func(client *Client) { log.Print("Client disconnected.") },
   })
 
   //
   // Bind the server and have it begin listening for connections.
   //
-  server.Listen()
+  err = server.Start()
+  if err != nil {
+    log.Fatalf("The server failed to start! (Error: %s)", err)
+  }
+
+  //
+  // ...Do something here. Consider something like looping to handle operating system interupts...
+  //
+
+  //
+  // Tell the server to stop and wait for it to finishe doing so.
+  //
+  var chStopped chan bool
+
+  chStopped, err = server.Stop()
+  if err != nil {
+    log.Fatalf("The server failed to stop! (Error: %s)", err)
+  }
+
+  <-chStopped
 }
 ```

@@ -1,4 +1,4 @@
-package tcpserver
+package tcp
 
 import (
 	"net"
@@ -23,8 +23,8 @@ func TestBasicLifecycle(t *testing.T) {
 	// run some assertions.
 	//
 	server := CreateServer(&ServerConfig{
-		address:             TestServerAddress,
-		onNewClientCallback: func(c *Client) { newClient = true },
+		address:     TestServerAddress,
+		onNewClient: func(c *Client) { newClient = true },
 		onNewMessage: func(c *Client, message string) {
 			messageReceived = true
 			messageText = message
@@ -98,8 +98,8 @@ func TestBasicLifecycleAgain(t *testing.T) {
 	// run some assertions.
 	//
 	server := CreateServer(&ServerConfig{
-		address:             TestServerAddress,
-		onNewClientCallback: func(c *Client) { newClient = true },
+		address:     TestServerAddress,
+		onNewClient: func(c *Client) { newClient = true },
 		onNewMessage: func(c *Client, message string) {
 			messageReceived = true
 			messageText = message

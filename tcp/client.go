@@ -1,4 +1,4 @@
-package tcpserver
+package tcp
 
 import (
 	"bufio"
@@ -12,17 +12,17 @@ import (
 // Client holds info about a single client connection.
 //
 type Client struct {
-	id     int        // The unique id assigned to the client.
-	conn   net.Conn   // Literal connection to the client.
-	server *TCPServer // The server that the client belongs to.
-	chStop chan bool  // Channel that will be used to tell the client's handler loop to stop.
-	chDone chan bool  // Channel that will be used to tell whoever cares that the client's handler loop has stopped.
+	id     int       // The unique id assigned to the client.
+	conn   net.Conn  // Literal connection to the client.
+	server *Server   // The server that the client belongs to.
+	chStop chan bool // Channel that will be used to tell the client's handler loop to stop.
+	chDone chan bool // Channel that will be used to tell whoever cares that the client's handler loop has stopped.
 }
 
 //
 // CreateClient instantiates and returns a new client instance.
 //
-func CreateClient(id int, conn net.Conn, server *TCPServer) *Client {
+func CreateClient(id int, conn net.Conn, server *Server) *Client {
 	o := &Client{
 		id:     id,
 		conn:   conn,
