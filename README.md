@@ -43,7 +43,7 @@ func main() {
   //
 
   //
-  // Tell the server to stop and wait for it to finishe doing so.
+  // Tell the server to stop and wait for it to finish doing so.
   //
   chStopped, err := server.Stop()
   if err != nil {
