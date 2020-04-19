@@ -38,7 +38,7 @@ func CreateClient(id int, conn net.Conn, server *Server) *Client {
 // String returns a printable representation of the client.
 //
 func (o *Client) String() string {
-	return fmt.Sprintf("%5d %21s", o.ID(), o.RemoteAddr())
+	return fmt.Sprintf("%05d %21s", o.ID(), o.RemoteAddr())
 }
 
 //
