@@ -12,66 +12,102 @@ import (
 // Client holds info about a single client connection.
 //
 type Client struct {
-	conn   net.Conn // Literal connection to the client.
-	server *Server  // The server that the client belongs to.
+	id     int        // The unique id assigned to the client.
+	conn   net.Conn   // Literal connection to the client.
+	server *TCPServer // The server that the client belongs to.
+	chStop chan bool  // Channel that will be used to tell the client's handler loop to stop.
+	chDone chan bool  // Channel that will be used to tell whoever cares that the client's handler loop has stopped.
+}
+
+//
+// CreateClient instantiates and returns a new client instance.
+//
+func CreateClient(id int, conn net.Conn, server *TCPServer) *Client {
+	o := &Client{
+		id:     id,
+		conn:   conn,
+		server: server,
+		chStop: make(chan bool, 1),
+		chDone: make(chan bool, 1),
+	}
+
+	return o
+}
+
+//
+// String returns a printable representation of the client.
+//
+func (o *Client) String() string {
+	return fmt.Sprintf("%5d %21s", o.ID(), o.RemoteAddr())
+}
+
+//
+// ID returns the unique id that has been assigned to client.
+//
+func (o *Client) ID() int {
+	return o.id
 }
 
 //
 // LogPrefix generates a prefix string that can be used in log messages about the client.
 //
-func (c *Client) LogPrefix() string {
-	return c.logPrefix("  ")
+func (o *Client) LogPrefix() string {
+	return o.logPrefix("  ")
 }
 
 //
 // RcvLogPrefix generates a prefix string that can be used in log messages about messages recieved
 // from the client.
 //
-func (c *Client) RcvLogPrefix() string {
-	return c.logPrefix("~>")
+func (o *Client) RcvLogPrefix() string {
+	return o.logPrefix("~>")
 }
 
 //
 // SndLogPrefix generates a prefix string that can be used in log messages about messages sent to
 // the client.
 //
-func (c *Client) SndLogPrefix() string {
-	return c.logPrefix("<~")
+func (o *Client) SndLogPrefix() string {
+	return o.logPrefix("<~")
 }
 
 //
 // RemoteAddr returns an address string (e.g. "{ip}:{port}") for the remote address of the client.
 //
-func (c *Client) RemoteAddr() string {
-	return c.conn.RemoteAddr().String()
+func (o *Client) RemoteAddr() string {
+	return o.conn.RemoteAddr().String()
 }
 
 //
 // LocalAddr returns an address string (e.g. "{ip}:{port}") for the local address of the client.
 //
-func (c *Client) LocalAddr() string {
-	return c.conn.LocalAddr().String()
+func (o *Client) LocalAddr() string {
+	return o.conn.LocalAddr().String()
 }
 
 //
-// Close closes the current connection to the client.
+// Close beigns the process of closing the current connection to the client. It returns a channel
+// that can optionally be blocked on if the caller would like to know when the connection has been
+// completely closed.
 //
-func (c *Client) Close() {
-	c.conn.Close()
+func (o *Client) Close() <-chan bool {
+	o.chStop <- true
+
+	return o.chDone
 }
 
 //
 // Send sends the specified message to the client.
 //
-func (c *Client) Send(message string) error {
-	return c.SendBytes([]byte(message))
+func (o *Client) Send(message string) error {
+	return o.SendBytes([]byte(message))
 }
 
 //
 // SendBytes sends the specified bytes to the client.
 //
-func (c *Client) SendBytes(b []byte) error {
-	_, err := c.conn.Write(b)
+func (o *Client) SendBytes(b []byte) error {
+	_, err := o.conn.Write(b)
 	return err
 }
 
@@ -79,55 +115,90 @@ func (c *Client) SendBytes(b []byte) error {
 // logPrefix actually generates the prefix strings returned by the varous "*LogPrefix()" methods
 // that are provided with public visibility.
 //
-func (c *Client) logPrefix(symbol string) string {
-	return fmt.Sprintf("<~> %21s %s ", c.RemoteAddr(), symbol)
+func (o *Client) logPrefix(symbol string) string {
+	return fmt.Sprintf("<~> %s %s ", o.String(), symbol)
 }
 
 //
 // listen reads and processes new messages from the client while it is connected. It is intended to
 // be run in its own goroutine per connected client.
 //
-func (c *Client) listen() {
-	//
-	// Make sure that, even if something goes wrong, we close the client connection.
-	//
-	defer c.Close()
-
+func (o *Client) listen() {
 	//
 	// Execute the registered "new client" event handler.
 	//
-	c.server.onNewClientCallback(c)
+	o.server.onNewClient(o)
 
 	//
-	// Create a buffer reader to read recieved messages from the client and begin doing so in a loop.
+	// Create a buffer reader to read recieved messages from the client and begin doing so in a new
+	// goroutine.
 	//
-	reader := bufio.NewReader(c.conn)
-	for {
-		//
-		// Attempt to block and read the next message from the client. If this fails for any reason
-		// (e.g. an actual error or a disconnect), handle it accordingly.
-		//
-		message, err := reader.ReadString('\n')
+	reader := bufio.NewReader(o.conn)
+	chReader := make(chan string)
+	chReaderDone := make(chan bool, 1)
 
-		if err != nil {
-			if err == io.EOF {
-				log.Printf("%sClient has disconnected.", c.LogPrefix())
-			} else {
-				log.Printf("%sBuffer read for client at failed. Connection will be closed. "+
-					"(Error: %s)", c.LogPrefix(), err)
+	go func() {
+		for {
+			msg, err := reader.ReadString('\n')
+
+			if err != nil {
+				if err == io.EOF {
+					log.Printf("%sClient has disconnected.", o.LogPrefix())
+				} else {
+					log.Printf(
+						"%sBuffer read for client at failed. (Error: %s) (Hint: Did the server shutdown with "+
+							"clients still connected?)",
+						o.LogPrefix(),
+						err,
+					)
+				}
+
+				break
 			}
 
-			c.Close()
-			c.server.onClientConnectionClosed(c, err)
-			c.server.forgetClient(c)
-
-			return
+			chReader <- msg
 		}
 
-		//
-		// If we get this far, we recieved a valid message from the client. Thus, execute the registered
-		// message handler.
-		//
-		c.server.onNewMessage(c, message)
+		close(chReader)
+
+		chReaderDone <- true
+	}()
+
+	//
+	// Select on either new messages or a kill signal.
+	//
+	stop := false
+
+	for !stop {
+		select {
+		case msg, ok := <-chReader:
+			if !ok {
+				stop = true
+			} else {
+				o.server.onNewMessage(o, msg)
+			}
+
+		case <-o.chStop:
+			stop = true
+		}
 	}
+
+	//
+	// Shutdown the connection.
+	//
+	o.server.onClientConnectionClosed(o)
+	o.server.forgetClient(o)
+	o.conn.Close()
+
+	//
+	// Block until the reader goroutine completes.
+	//
+	<-chReaderDone
+
+	//
+	// Tell anyone waiting on us that we are done.
+	//
+	o.chDone <- true
+
+	return
 }

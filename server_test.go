@@ -9,10 +9,6 @@ import (
 const TestServerAddress = "localhost:9999"
 const TestMessage = "This is a test message. Here is a number: 12345.67890!\n"
 
-func buildTestServer() *Server {
-	return New(TestServerAddress)
-}
-
 func TestBasicLifecycle(t *testing.T) {
 	//
 	// Define variables upon which we will state and assert proper functionality.
@@ -20,34 +16,26 @@ func TestBasicLifecycle(t *testing.T) {
 	var messageReceived bool
 	var messageText string
 	var newClient bool
-	var connectinClosed bool
+	var connectionClosed bool
 
 	//
 	// Create a new server and register event handlers that will set variables against which we can
 	// run some assertions.
 	//
-	server := buildTestServer()
-
-	server.OnNewClient(func(c *Client) {
-		newClient = true
+	server := CreateServer(&ServerConfig{
+		address:             TestServerAddress,
+		onNewClientCallback: func(c *Client) { newClient = true },
+		onNewMessage: func(c *Client, message string) {
+			messageReceived = true
+			messageText = message
+		},
+		onClientConnectionClosed: func(client *Client) { connectionClosed = true },
 	})
 
-	server.OnNewMessage(func(c *Client, message string) {
-		messageReceived = true
-		messageText = message
-	})
-
-	server.OnClientConnectionClosed(func(c *Client, err error) {
-		connectinClosed = true
-	})
-
-	go server.Start()
+	server.Start()
 
 	//
 	// Give the server some time to bind.
-	//
-	// NOTE: Although server.Listen() is a blocking call, we are running it asynchronously in a
-	//  goroutine for the sake of this test.
 	//
 	time.Sleep(10 * time.Millisecond)
 
@@ -57,7 +45,7 @@ func TestBasicLifecycle(t *testing.T) {
 	conn, err := net.Dial("tcp", TestServerAddress)
 
 	if err != nil {
-		t.Fatal("Failed to connect to test server")
+		t.Fatal("Failed to connect to the test server.")
 	}
 
 	conn.Write([]byte(TestMessage))
@@ -84,11 +72,16 @@ func TestBasicLifecycle(t *testing.T) {
 		t.Error("A message was recieved, but it was not equal to what was expected.")
 	}
 
-	if connectinClosed != true {
+	if connectionClosed != true {
 		t.Error("The \"OnClientConnectionClosed\" event handler never fired.")
 	}
 
-	server.Stop()
+	//
+	// Tell the server to shutdown and then wait for it to finish.
+	//
+	chStopped, _ := server.Stop()
+
+	<-chStopped
 }
 
 func TestBasicLifecycleAgain(t *testing.T) {
@@ -98,34 +91,26 @@ func TestBasicLifecycleAgain(t *testing.T) {
 	var messageReceived bool
 	var messageText string
 	var newClient bool
-	var connectinClosed bool
+	var connectionClosed bool
 
 	//
 	// Create a new server and register event handlers that will set variables against which we can
 	// run some assertions.
 	//
-	server := buildTestServer()
-
-	server.OnNewClient(func(c *Client) {
-		newClient = true
+	server := CreateServer(&ServerConfig{
+		address:             TestServerAddress,
+		onNewClientCallback: func(c *Client) { newClient = true },
+		onNewMessage: func(c *Client, message string) {
+			messageReceived = true
+			messageText = message
+		},
+		onClientConnectionClosed: func(client *Client) { connectionClosed = true },
 	})
 
-	server.OnNewMessage(func(c *Client, message string) {
-		messageReceived = true
-		messageText = message
-	})
-
-	server.OnClientConnectionClosed(func(c *Client, err error) {
-		connectinClosed = true
-	})
-
-	go server.Start()
+	server.Start()
 
 	//
 	// Give the server some time to bind.
-	//
-	// NOTE: Although server.Listen() is a blocking call, we are running it asynchronously in a
-	//  goroutine for the sake of this test.
 	//
 	time.Sleep(10 * time.Millisecond)
 
@@ -135,7 +120,7 @@ func TestBasicLifecycleAgain(t *testing.T) {
 	conn, err := net.Dial("tcp", TestServerAddress)
 
 	if err != nil {
-		t.Fatal("Failed to connect to test server")
+		t.Fatal("Failed to connect to the test server.")
 	}
 
 	conn.Write([]byte(TestMessage))
@@ -162,9 +147,56 @@ func TestBasicLifecycleAgain(t *testing.T) {
 		t.Error("A message was recieved, but it was not equal to what was expected.")
 	}
 
-	if connectinClosed != true {
+	if connectionClosed != true {
 		t.Error("The \"OnClientConnectionClosed\" event handler never fired.")
 	}
 
-	server.Stop()
+	//
+	// Tell the server to shutdown and then wait for it to finish.
+	//
+	chStopped, _ := server.Stop()
+
+	<-chStopped
+}
+
+func TestServerShutdownBeforeClientDisconnect(t *testing.T) {
+	//
+	// Create a new server and register event handlers that will set variables against which we can
+	// run some assertions.
+	//
+	server := CreateServer(&ServerConfig{
+		address: TestServerAddress,
+	})
+
+	server.Start()
+
+	//
+	// Give the server some time to bind.
+	//
+	time.Sleep(10 * time.Millisecond)
+
+	//
+	// Connect to the server as a new client and sent it a test message.
+	//
+	conn, err := net.Dial("tcp", TestServerAddress)
+
+	if err != nil {
+		t.Fatal("Failed to connect to the test server.")
+	}
+
+	conn.Write([]byte(TestMessage))
+
+	// NOTE: We explicitly do not close the client connection here.
+
+	//
+	// Give the server a chance to recieve the new connection and the new message.
+	//
+	time.Sleep(10 * time.Millisecond)
+
+	//
+	// Tell the server to shutdown and then wait for it to finish.
+	//
+	chStopped, _ := server.Stop()
+
+	<-chStopped
 }
