@@ -1,4 +1,4 @@
-# Golang TCP/IP and UDP Packet Server
+# Packet Server
 
 ![Status: Work in Progress](https://img.shields.io/badge/Status-Work&#32;in&#32;Progress-blue.svg)
 
