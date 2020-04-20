@@ -2,7 +2,6 @@ package tcp
 
 import (
 	"crypto/tls"
-	"errors"
 	"log"
 	"net"
 	"sync"
@@ -24,14 +23,14 @@ type ServerConfig struct {
 //
 type Server struct {
 	mu           *sync.Mutex     // Synchronizes access to the client table.
-	started      bool            // Whetehr or not the server has started yet.
 	config       *ServerConfig   // Basic configuration attributes of the server.
 	tlsConfig    *tls.Config     // Secure connection configuration attributes of the server. Only relevent when using TLS.
 	listener     net.Listener    // Actual listener that will bind to the configured address and await new connections.
 	clients      map[int]*Client // Holds each connected client.
 	nextClientID int             // Next valid client identifier that can be assigned to a new client.
-	chStop       chan bool       // Channel that will be used to tell the server's listener loop to stop.
-	chDone       chan bool       // Channel that will be used to tell whoever cares that the server's listener loop has stopped.
+	chStarted    chan bool       // Channel that will be used to tell whoever cares that the server has completed startup.
+	chKill       chan bool       // Channel that will be used to tell the server's listener loop to stop.
+	chStopped    chan bool       // Channel that will be used to tell whoever cares that the server's listener loop has stopped.
 }
 
 //
@@ -59,8 +58,8 @@ func (o *Server) SendBytesAll(pyld []byte) {
 
 		if err != nil {
 			log.Printf(
-				"Failed to send \"send all\" message to a client. (Client: %s) (Hint: The client may "+
-					"have already disconnected.)",
+				"Failed to send \"send all\" message to a connected TCP/IP client. (Client: %s) (Hint: "+
+					"The client may have already disconnected.)",
 				client,
 			)
 		}
@@ -102,37 +101,28 @@ func (o *Server) onNewMessage(client *Client, msg string) {
 }
 
 //
-// Start starts the server if it has not already been started, or errors otherwise.
+// Start implements the method described by packetsvr.Server interface.
 //
-func (o *Server) Start() error {
-	o.mu.Lock()
-	defer o.mu.Unlock()
-
+func (o *Server) Start() (<-chan bool, error) {
 	//
 	// Log some debug info.
 	//
-	log.Print("Attempting to start server...")
-
-	//
-	// Make sure that the server is not already running.
-	//
-	if o.started {
-		return errors.New("an attempt was made to start a server that was already running")
-	}
+	log.Print("Attempting to start the TCP/IP packet server...")
 
 	//
 	// (Re)-initialize necessary members of the server structure.
 	//
 	o.clients = make(map[int]*Client, 0)
-	o.chStop = make(chan bool, 1)
-	o.chDone = make(chan bool, 1)
+	o.chStarted = make(chan bool, 1)
+	o.chKill = make(chan bool, 1)
+	o.chStopped = make(chan bool, 1)
 
 	//
 	// Resolve the address.
 	//
 	tcpAddr, tcpAddrErr := net.ResolveTCPAddr("tcp", o.config.Address)
 	if tcpAddrErr != nil {
-		return tcpAddrErr
+		return nil, tcpAddrErr
 	}
 
 	//
@@ -147,7 +137,7 @@ func (o *Server) Start() error {
 	}
 
 	if listenerErr != nil {
-		return listenerErr
+		return nil, listenerErr
 	}
 
 	//
@@ -156,63 +146,45 @@ func (o *Server) Start() error {
 	//
 	go o.listen()
 
+	///
+	// Return a channel that can be blocked on if it is necessary to wait for the server to completely
+	// start up.
 	//
-	// Set the running sentinel
+	// NOTE: The goroutine handling the server's lifecycle will send a message on the "started"
+	//  channel that we return here once it has completely started up.
 	//
-	o.started = true
-
-	log.Print("The server has been started.")
-
-	return nil
+	return o.chStarted, nil
 }
 
 //
-// Stop begins the shutdown process for the running server. It returns a channel that can be blocked
-// on if waiting until the server is completely shutdown is necessary.
+// Stop implements the method described by packetsvr.Server interface.
 //
 func (o *Server) Stop() (<-chan bool, error) {
-	o.mu.Lock()
-	defer o.mu.Unlock()
-
 	//
 	// Log some debug info.
 	//
-	log.Print("Attempting to stop server...")
-
-	//
-	// Make sure we even can stop the server (a.k.a. make sure that the server is actually running).
-	//
-	if !o.started {
-		return nil, errors.New("an attempt was made to stop a server that was not already running")
-	}
+	log.Print("Attempting to stop the TCP/IP packet server...")
 
 	//
 	// Send the kill signal.
 	//
-	o.chStop <- true
+	o.chKill <- true
 
 	//
 	// Return a channel that can be blocked on if it is necessary to wait for the server to completely
 	// shutdown.
 	//
-	return o.chDone, nil
-}
-
-//
-// Running returns whether or not the server is currently running.
-//
-func (o *Server) Running() bool {
-	o.mu.Lock()
-	defer o.mu.Unlock()
-
-	return o.started
+	// NOTE: The goroutine handling the server's lifecycle will send a message on the "stopped"
+	//  channel that we return here once it has completely shut down.
+	//
+	return o.chStopped, nil
 }
 
 //
 // CreateServer creates a new regular server instance.
 //
 func CreateServer(config *ServerConfig) *Server {
-	log.Print("Creating server with address ", config.Address, ".")
+	log.Print("Creating a TCP/IP packet server with address ", config.Address, ".")
 
 	server := &Server{
 		mu:        &sync.Mutex{},
@@ -227,7 +199,7 @@ func CreateServer(config *ServerConfig) *Server {
 // CreateServerWithTLS creates a new TLS-enabled server instance that can handle secure connections.
 //
 func CreateServerWithTLS(config *ServerConfig, certFile string, keyFile string) *Server {
-	log.Print("Creating server with address ", config.Address, ".")
+	log.Print("Creating TLS-enabled TCP/IP packet server with address ", config.Address, ".")
 
 	cert, _ := tls.LoadX509KeyPair(certFile, keyFile)
 	tlsConfig := tls.Config{
@@ -247,6 +219,9 @@ func CreateServerWithTLS(config *ServerConfig, certFile string, keyFile string) 
 // client.
 //
 func (o *Server) getAndIncrementNextClientID() int {
+	// NOTE:  We must lock because we are going to generate a new client identifier that must be
+	//  unique, even if multiple goroutines are trying to do so around the same time.
+
 	o.mu.Lock()
 	defer o.mu.Unlock()
 
@@ -260,6 +235,9 @@ func (o *Server) getAndIncrementNextClientID() int {
 // addClient adds the specified client to the server's client table.
 //
 func (o *Server) addClient(client *Client, id int) {
+	// NOTE:  We must lock because we are going to mutate the client table. Multiple goroutines may
+	//  be trying to perform this action around the same time.
+
 	o.mu.Lock()
 	defer o.mu.Unlock()
 
@@ -271,20 +249,13 @@ func (o *Server) addClient(client *Client, id int) {
 // that it does NOT close the connection to the client.
 //
 func (o *Server) forgetClient(c *Client) {
+	// NOTE:  We must lock because we are going to mutate the client table. Multiple goroutines may
+	//  be trying to perform this action around the same time.
+
 	o.mu.Lock()
 	defer o.mu.Unlock()
 
 	delete(o.clients, c.ID())
-}
-
-//
-// unsetRunning sets the server's running sentinel to "false" in a thread-safe manner.
-//
-func (o *Server) unsetRunning() {
-	o.mu.Lock()
-	defer o.mu.Unlock()
-
-	o.started = false
 }
 
 //
@@ -300,7 +271,7 @@ func (o *Server) handleNewClient(conn net.Conn) {
 
 	go client.listen()
 
-	log.Printf("%sClient has connected.", client.LogPrefix())
+	log.Printf("%sA TCP/IP client has connected.", client.LogPrefix())
 }
 
 //
@@ -325,7 +296,7 @@ func (o *Server) listen() {
 			if err != nil {
 				if realErr, ok := err.(net.Error); ok && realErr.Temporary() {
 					log.Printf(
-						"A temporary error occured while listening for new connections. Will continue "+
+						"A temporary error occured while listening for new TCP/IP connections. Will continue "+
 							"listening after a short delay. (Error: %s)",
 						err,
 					)
@@ -333,8 +304,8 @@ func (o *Server) listen() {
 					time.Sleep(1 * time.Second)
 				} else {
 					log.Printf(
-						"A critical failure occurred while listening for new connections. (Error: %s) (Hint: "+
-							"Was the server shut down?)",
+						"A critical failure occurred while listening for new TCP/IP connections. (Error: %s) "+
+							"(Hint: Was the server shut down?)",
 						err,
 					)
 
@@ -351,6 +322,13 @@ func (o *Server) listen() {
 	}()
 
 	//
+	// Indicate that the server has started.
+	//
+	o.chStarted <- true
+
+	log.Print("The TCP/IP packet server has been started.")
+
+	//
 	// Select on either new connections or a kill signal.
 	//
 	stop := false
@@ -364,7 +342,7 @@ func (o *Server) listen() {
 				o.handleNewClient(conn)
 			}
 
-		case <-o.chStop:
+		case <-o.chKill:
 			stop = true
 		}
 	}
@@ -372,7 +350,7 @@ func (o *Server) listen() {
 	//
 	// Close the listener and block until the listener goroutine completes.
 	//
-	log.Print("Closing the listener...")
+	log.Print("Closing the TCP/IP packet server listener...")
 
 	o.listener.Close()
 
@@ -381,22 +359,21 @@ func (o *Server) listen() {
 	//
 	// Disconnect all clients and wait for them to finish cleaning themselves up.
 	//
-	log.Printf("Disconnecting all %d clients...", len(o.clients))
+	log.Printf("Disconnecting all %d clients from the TCP/IP packet server...", len(o.clients))
 
 	for _, e := range o.clients {
 		<-e.Close()
 	}
 
 	//
-	// Update the running sentinel.
+	// Log some debug info.
 	//
-	o.unsetRunning()
-	log.Print("The server has been stopped.")
+	log.Print("The TCP/IP packet server has been stopped.")
 
 	//
 	// Tell anyone waiting on us that we are done.
 	//
-	o.chDone <- true
+	o.chStopped <- true
 
 	return
 }

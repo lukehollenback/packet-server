@@ -38,7 +38,7 @@ func CreateClient(id int, conn net.Conn, server *Server) *Client {
 // String returns a printable representation of the client.
 //
 func (o *Client) String() string {
-	return fmt.Sprintf("%05d %21s", o.ID(), o.RemoteAddr())
+	return fmt.Sprintf("%05d TCP %21s", o.ID(), o.RemoteAddr())
 }
 
 //
@@ -143,11 +143,11 @@ func (o *Client) listen() {
 
 			if err != nil {
 				if err == io.EOF {
-					log.Printf("%sClient has disconnected.", o.LogPrefix())
+					log.Printf("%sThe TCP/IP client has disconnected.", o.LogPrefix())
 				} else {
 					log.Printf(
-						"%sBuffer read for client at failed. (Error: %s) (Hint: Did the server shutdown with "+
-							"clients still connected?)",
+						"%sBuffer read for the TCP/IP client failed. (Error: %s) (Hint: Did the server "+
+							"shut down with clients still connected?)",
 						o.LogPrefix(),
 						err,
 					)

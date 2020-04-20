@@ -10,6 +10,7 @@ import (
 
 func main() {
 	var err error
+	var ch <-chan bool
 
 	//
 	// Register a kill signal handler with the operating system so that we can gracefully shutdown if
@@ -32,10 +33,12 @@ func main() {
 	//
 	// Bind the server and have it begin listening for connections.
 	//
-	err = server.Start()
+	ch, err = server.Start()
 	if err != nil {
 		log.Fatalf("The server failed to start! (Error: %s)", err)
 	}
+
+	<-ch
 
 	//
 	// Block until we are shut down by the operating system.
@@ -45,10 +48,10 @@ func main() {
 	//
 	// Tell the server to stop and wait for it to finishe doing so.
 	//
-	chStopped, err := server.Stop()
+	ch, err = server.Stop()
 	if err != nil {
 		log.Fatalf("The server failed to stop! (Error: %s)", err)
 	}
 
-	<-chStopped
+	<-ch
 }
