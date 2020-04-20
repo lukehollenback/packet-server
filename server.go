@@ -4,7 +4,6 @@ package packetsvr
 // Server provides a protocol-agnostic interface for packet server implementations.
 //
 type Server interface {
-
 	//
 	// Start begins the start-up process of the packet server. This method may return faster than the
 	// server actually takes to start up. To handle such scenarios, a channel is returned that can be
