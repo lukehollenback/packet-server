@@ -22,8 +22,9 @@ func TestBasicLifecycle(t *testing.T) {
 	// Create a new server and register event handlers that will set variables against which we can
 	// run some assertions.
 	//
-	server := CreateServer(&ServerConfig{
+	server, err := CreateServer(&ServerConfig{
 		Address:     TestServerAddress,
+		Delim:       '\x00',
 		OnNewClient: func(c *Client) { newClient = true },
 		OnNewMessage: func(c *Client, message string) {
 			messageReceived = true
@@ -31,6 +32,9 @@ func TestBasicLifecycle(t *testing.T) {
 		},
 		OnClientConnectionClosed: func(client *Client) { connectionClosed = true },
 	})
+	if err != nil {
+		t.Fatalf("The server failed to create. (Error: %s)", err)
+	}
 
 	server.Start()
 
@@ -97,8 +101,9 @@ func TestBasicLifecycleAgain(t *testing.T) {
 	// Create a new server and register event handlers that will set variables against which we can
 	// run some assertions.
 	//
-	server := CreateServer(&ServerConfig{
+	server, err := CreateServer(&ServerConfig{
 		Address:     TestServerAddress,
+		Delim:       '\x00',
 		OnNewClient: func(c *Client) { newClient = true },
 		OnNewMessage: func(c *Client, message string) {
 			messageReceived = true
@@ -106,6 +111,9 @@ func TestBasicLifecycleAgain(t *testing.T) {
 		},
 		OnClientConnectionClosed: func(client *Client) { connectionClosed = true },
 	})
+	if err != nil {
+		t.Fatalf("The server failed to create. (Error: %s)", err)
+	}
 
 	server.Start()
 
@@ -164,9 +172,13 @@ func TestServerShutdownBeforeClientDisconnect(t *testing.T) {
 	// Create a new server and register event handlers that will set variables against which we can
 	// run some assertions.
 	//
-	server := CreateServer(&ServerConfig{
+	server, err := CreateServer(&ServerConfig{
 		Address: TestServerAddress,
+		Delim:   '\x00',
 	})
+	if err != nil {
+		t.Fatalf("The server failed to create. (Error: %s)", err)
+	}
 
 	server.Start()
 

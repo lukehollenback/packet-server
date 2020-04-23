@@ -2,6 +2,7 @@ package tcp
 
 import (
 	"crypto/tls"
+	"errors"
 	"log"
 	"net"
 	"sync"
@@ -184,8 +185,13 @@ func (o *Server) Stop() (<-chan bool, error) {
 //
 // CreateServer creates a new regular server instance.
 //
-func CreateServer(config *ServerConfig) *Server {
+func CreateServer(config *ServerConfig) (*Server, error) {
 	log.Print("Creating a TCP/IP packet server with address ", config.Address, ".")
+
+	err := validateConfig(config)
+	if err != nil {
+		return nil, err
+	}
 
 	server := &Server{
 		mu:        &sync.Mutex{},
@@ -193,14 +199,19 @@ func CreateServer(config *ServerConfig) *Server {
 		tlsConfig: nil,
 	}
 
-	return server
+	return server, nil
 }
 
 //
 // CreateServerWithTLS creates a new TLS-enabled server instance that can handle secure connections.
 //
-func CreateServerWithTLS(config *ServerConfig, certFile string, keyFile string) *Server {
+func CreateServerWithTLS(config *ServerConfig, certFile string, keyFile string) (*Server, error) {
 	log.Print("Creating TLS-enabled TCP/IP packet server with address ", config.Address, ".")
+
+	err := validateConfig(config)
+	if err != nil {
+		return nil, err
+	}
 
 	cert, _ := tls.LoadX509KeyPair(certFile, keyFile)
 	tlsConfig := tls.Config{
@@ -212,7 +223,19 @@ func CreateServerWithTLS(config *ServerConfig, certFile string, keyFile string) 
 		tlsConfig: &tlsConfig,
 	}
 
-	return server
+	return server, nil
+}
+
+//
+// validateConfig validates that to provided configuration structure contains necessary and valid
+// values for a server to be created and started with.
+//
+func validateConfig(config *ServerConfig) error {
+	if len(config.Address) == 0 {
+		return errors.New("an address ({ip}:{port}) must be specified")
+	}
+
+	return nil
 }
 
 //

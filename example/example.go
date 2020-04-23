@@ -23,13 +23,16 @@ func main() {
 	//
 	// Create a new server that will bind to port 9999.
 	//
-	server := tcp.CreateServer(&tcp.ServerConfig{
+	server, err := tcp.CreateServer(&tcp.ServerConfig{
 		Address:                  "localhost:9999",
 		OnNewClient:              func(c *tcp.Client) { log.Print("Client connected.") },
 		OnNewMessage:             func(c *tcp.Client, msg string) { log.Print(msg) },
 		OnClientConnectionClosed: func(client *tcp.Client) { log.Print("Client disconnected.") },
 		Delim:                    '\n',
 	})
+	if err != nil {
+		log.Fatalf("The server failed to create. (Error: %s)", err)
+	}
 
 	//
 	// Bind the server and have it begin listening for connections.
