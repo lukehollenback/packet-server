@@ -99,19 +99,20 @@ func (o *Client) Close() <-chan bool {
 }
 
 //
-// Send appends the appropriate delimiter and then sends the specified message to the client.
+// Send sends the specified message to the client.
 //
 func (o *Client) Send(message string) error {
-	msgBytes := append([]byte(message), o.delim)
-
-	return o.SendBytes(msgBytes)
+	return o.SendBytes([]byte(message))
 }
 
 //
-// SendBytes sends the specified bytes to the client.
+// SendBytes appends the appropriate delimiter and then sends the specified bytes to the client.
 //
 func (o *Client) SendBytes(b []byte) error {
+	b = append(b, o.delim)
+
 	_, err := o.conn.Write(b)
+
 	return err
 }
 
