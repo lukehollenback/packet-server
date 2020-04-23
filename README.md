@@ -28,6 +28,7 @@ func main() {
     OnNewClient:              func(c *tcp.Client) { log.Print("Client connected.") },
     OnNewMessage:             func(c *tcp.Client, msg string) { log.Print(msg) },
     OnClientConnectionClosed: func(client *tcp.Client) { log.Print("Client disconnected.") },
+    Delim:                    '\n',
   })
 
   //

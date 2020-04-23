@@ -16,6 +16,7 @@ type ServerConfig struct {
 	OnNewClient              func(client *Client)             // Handler function to execute when a new client connects.
 	OnClientConnectionClosed func(client *Client)             // Handler function to execute when a client disconnects. Do not expect connection to still be alive when executed.
 	OnNewMessage             func(client *Client, msg string) // Handler function to execute when a new message is recieved from a client.
+	Delim                    byte                             // The delimiter that should be expected when splitting packets up into messages.
 }
 
 //
@@ -265,7 +266,7 @@ func (o *Server) forgetClient(c *Client) {
 //
 func (o *Server) handleNewClient(conn net.Conn) {
 	id := o.getAndIncrementNextClientID()
-	client := CreateClient(id, conn, o)
+	client := CreateClient(id, conn, o, o.config.Delim)
 
 	o.addClient(client, id)
 

@@ -15,6 +15,7 @@ type Client struct {
 	id     int       // The unique id assigned to the client.
 	conn   net.Conn  // Literal connection to the client.
 	server *Server   // The server that the client belongs to.
+	delim  byte      // The byte that should act as a message delimiter.
 	chStop chan bool // Channel that will be used to tell the client's handler loop to stop.
 	chDone chan bool // Channel that will be used to tell whoever cares that the client's handler loop has stopped.
 }
@@ -22,11 +23,12 @@ type Client struct {
 //
 // CreateClient instantiates and returns a new client instance.
 //
-func CreateClient(id int, conn net.Conn, server *Server) *Client {
+func CreateClient(id int, conn net.Conn, server *Server, delim byte) *Client {
 	o := &Client{
 		id:     id,
 		conn:   conn,
 		server: server,
+		delim:  delim,
 		chStop: make(chan bool, 1),
 		chDone: make(chan bool, 1),
 	}
@@ -139,7 +141,7 @@ func (o *Client) listen() {
 
 	go func() {
 		for {
-			msg, err := reader.ReadString('\n')
+			msg, err := reader.ReadString(o.delim)
 
 			if err != nil {
 				if err == io.EOF {
