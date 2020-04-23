@@ -7,7 +7,7 @@ import (
 )
 
 const TestServerAddress = "localhost:9999"
-const TestMessage = "This is a test message. Here is a number: 12345.67890!\n"
+const TestMessage = "This is a test message. Here is a number: 12345.67890!\x00"
 
 func TestBasicLifecycle(t *testing.T) {
 	//
